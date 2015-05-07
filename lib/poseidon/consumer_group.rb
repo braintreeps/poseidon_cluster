@@ -196,7 +196,7 @@ class Poseidon::ConsumerGroup
   def partitions
     return [] unless topic_metadata
 
-    topic_metadata.struct.available_partitions.sort_by do |part|
+    topic_metadata.struct.partitions.sort_by do |part|
       broker = metadata.brokers[part.leader]
       [broker.host, broker.port].join(":")
     end
