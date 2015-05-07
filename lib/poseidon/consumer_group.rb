@@ -37,7 +37,8 @@ class Poseidon::ConsumerGroup
     def initialize(group, partition, options = {})
       broker = group.leader(partition)
       offset = group.offset(partition)
-      offset = :earliest_offset if offset == 0
+      offset = (options[:trail] ? :latest_offset : :earliest_offset) if offset == 0
+      options.delete(:trail)
       super group.id, broker.host, broker.port, group.topic, partition, offset, options
     end
 
@@ -88,16 +89,21 @@ class Poseidon::ConsumerGroup
   # @option options [Integer] :min_bytes Smallest amount of data the server should send us. Default: 0 (Send us data as soon as it is ready)
   # @option options [Integer] :claim_timeout Maximum number of seconds to wait for a partition claim. Default: 10
   # @option options [Integer] :loop_delay Number of seconds to delay the next fetch (in #fetch_loop) if nothing was returned. Default: 1
+  # @option options [Integer] :socket_timeout_ms broker connection wait timeout in ms. Default: 10000
   # @option options [Boolean] :register Automatically register instance and start consuming. Default: true
+  # @option options [Boolean] :trail Starts reading messages from the latest partitions offsets and skips 'old' messages . Default: false
   #
   # @api public
   def initialize(name, brokers, zookeepers, topic, options = {})
     @name       = name
     @topic      = topic
     @zk         = ::ZK.new(zookeepers.join(","))
+    # Poseidon::BrokerPool doesn't provide default value for this option
+    # Configuring default value like this isn't beautiful, though.. by kssminus
+    options[:socket_timeout_ms] ||= 10000
     @options    = options
     @consumers  = []
-    @pool       = ::Poseidon::BrokerPool.new(id, brokers)
+    @pool       = ::Poseidon::BrokerPool.new(id, brokers, options[:socket_timeout_ms])
     @mutex      = Mutex.new
     @registered = false
 
@@ -190,7 +196,7 @@ class Poseidon::ConsumerGroup
   def partitions
     return [] unless topic_metadata
 
-    topic_metadata.struct.partitions.sort_by do |part|
+    topic_metadata.struct.available_partitions.sort_by do |part|
       broker = metadata.brokers[part.leader]
       [broker.host, broker.port].join(":")
     end

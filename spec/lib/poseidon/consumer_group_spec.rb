@@ -41,8 +41,9 @@ describe Poseidon::ConsumerGroup do
     allow_any_instance_of(Poseidon::ConsumerGroup).to receive(:sleep)
     allow_any_instance_of(Poseidon::PartitionConsumer).to receive_messages(resolve_offset_if_necessary: 0)
     allow_any_instance_of(Poseidon::BrokerPool).to receive_messages(fetch_metadata_from_broker: metadata)
-    allow_any_instance_of(Poseidon::Connection).to receive(:fetch).with(10000, 0, ->req { req[0].partition_fetches[0].partition == 0 }).and_return(fetch_response(10))
-    allow_any_instance_of(Poseidon::Connection).to receive(:fetch).with(10000, 0, ->req { req[0].partition_fetches[0].partition == 1 }).and_return(fetch_response(5))
+
+    allow_any_instance_of(Poseidon::Connection).to receive(:fetch).with(10000, 1, ->req { req[0].partition_fetches[0].partition == 0 }).and_return(fetch_response(10))
+    allow_any_instance_of(Poseidon::Connection).to receive(:fetch).with(10000, 1, ->req { req[0].partition_fetches[0].partition == 1 }).and_return(fetch_response(5))
   end
 
   it               { should be_registered }
@@ -133,6 +134,12 @@ describe Poseidon::ConsumerGroup do
     it 'should start with the earliest offset if none stored' do
       group.unstub(:offset)
       subject.offset.should == :earliest_offset
+    end
+
+    it 'should start with the latest offset if none stored and in trailing mode' do
+      group.unstub(:offset)
+      trailing_consumer = described_class::Consumer.new group, 1, {trail: true}
+      trailing_consumer.offset.should == :latest_offset
     end
 
   end
